@@ -42,7 +42,7 @@ dlong = longitude[1: ] - longitude[0]
 #distance = position * c
 
 
-coords0 = (longitude[0],latitude[0])
+coords0 = (latitude[0],longitude[0])
 distanceEarth = []
 angle = []
 
