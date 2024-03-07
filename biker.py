@@ -26,6 +26,9 @@ for track in gpx.tracks:
                 h.append(point.elevation)
                 latitude.append(point.latitude)
                 longitude.append(point.longitude)
+                if len(latitude) > 2:
+                    if latitude[-1] == latitude[-2]:
+                        breakpoint()
                 
 h = np.array(h)
 elevationEarth = h - h[0]
