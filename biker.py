@@ -7,13 +7,15 @@ Created on Fri Dec  1 11:08:01 2023
 
 import numpy as np
 import matplotlib.pyplot as pp
+from scipy.signal import savgol_filter
 from sys import exit
 import gpxpy
 import gpxpy.gpx
 import geopy.distance
 
 import numpy as np
-gpx_file = open('Alpe_d_Huez.gpx')
+filename = 'Alpe_d_Huez.gpx' 
+gpx_file = open(filename)
 
 gpx = gpxpy.parse(gpx_file) 
 h = []
@@ -28,9 +30,15 @@ for track in gpx.tracks:
                 longitude.append(point.longitude)
                 if len(latitude) > 2:
                     if latitude[-1] == latitude[-2]:
-                        breakpoint()
-                
+                        #if this happens, we found a duplicate point in the gpx file
+                        #so just remove it from the lists
+                        latitude.pop()
+                        longitude.pop()
+                        h.pop()
+                     
 h = np.array(h)
+hSmoothed = savgol_filter(h, 200, 3) #Smooth the elevation data a little
+
 elevationEarth = h - h[0]
 
 npoints = len(h)
@@ -40,31 +48,37 @@ dlat = latitude[1:] - latitude[0]
 longitude = np.array(longitude)
 dlong = longitude[1: ] - longitude[0]
 
-#position = (np.sin(dlat/2))**2 + np.cos(latitude) * np.cos(latitude) * (np.sin(dlong/2))**2
-#c = 2 * np.atan2(np.sqrt(position), np.sqrt(1-position))
-#distance = position * c
 
-
-coords0 = (latitude[0],longitude[0])
-distanceEarth = []
+distanceTraveled = [0.0]
 angle = []
-
-for i in range(npoints):
-    coords = (longitude[i],latitude[i])
-
-    distanceEarth.append(geopy.distance.geodesic(coords0,coords).km)
-    
+previousCoords = (latitude[0],longitude[0])
+gradient = []
 for i in range(1,npoints):
-    x = distanceEarth[i] - distanceEarth[i-1]
-    y = elevationEarth[i] - elevationEarth[i-1]
-    angle.append(np.arctan(y/x))
-    
-    
-breakpoint()
+    #Set the distance variable as the distance traveled along the GPS
+    #We will use this array for interpolation when solving for the motion
+    #of the biker.
+
+    coords = (latitude[i],longitude[i]) #new coordinates
+    #how far between current and previous coordinates
+    newMovement = geopy.distance.geodesic(previousCoords,coords).m 
+
+    #keep track
+    distanceTraveled.append(distanceTraveled[-1] + newMovement)
+
+    #get change in elevation
+    y = h[i] - h[i-1]
+
+    #gradient is rise over run
+    gradient.append(y/newMovement)
+
+    #angle is arctan of gradient
+    angle.append(np.arctan(gradient[-1]))
+
+    previousCoords = coords #new coords become the old coords for the next iteration    
+
 
 # Set constants________________________________________________________________
-
-v01 = 4 #initial velocity
+v01 = 4 #initial velocity   
 def P1():
     p1 = 400
     return p1 #generate a random power output for dt 
@@ -79,94 +93,73 @@ C_d = 0.9 #coefficient of drag
 A = 0.33 # Area of biker (m^2)
 ro = 1.225 #density of air (Kg/m^3)
 n = 2E-5 # viscosity of air (Pa*s)
-
+heightBiker = 1.6 #m
 
 
 g = 9.81 #accerlation due to gravity (m/s^2)
 C_r = 0.008 #coefficient of rolling resitance for a bike
 C_h = 0.015 #coefficient of kinetic friction do to the wheel hub 
 # set velocity_________________________________________________________________
-V1 = [v01]
-time = np.linspace(0, final_time, step_value)
+v1 = [v01]
+time = [0] #Need to track time
+bikerElevation = [h[0]] #track elevation of the biker
 
-#______________________________________________________________________________
 
-# Define functions for slopes that vary with time
-#def Park_ride(t):
-   # path = np.random.uniform(-5,5)
-    #return np.sin(np.radians(path))
+x1 = [0]
+
+#Don't go past the gps track!
+endOfRoute = distanceTraveled[-1]
+
+#Run the variables for every iteration________________________________________
+while x1[-1] < endOfRoute:
+    #First, get the angle of the route by interpolating the 
+    #gps track data to the current position of the rider
+    current_angle = np.interp(x1[-1],distanceTraveled[1:],angle)
+    bikerElevation.append(np.interp(x1[-1],distanceTraveled,h))
+
+    Power_output = P1() #update the power
+
+    #calculate the forces (units are acceleration!!!!)
+    cyclist = Power_output/(m*v1[-1]) 
+    gravitationalForce = -g * np.sin(current_angle)
+    normal_Force = g*np.cos(current_angle)
+    Rolling_resistance = -C_r * normal_Force/m
+    Air_drag = -0.5*C_d*ro*A*v1[-1]**2/m
+    Viscous_force = -n*(v1[-1]/heightBiker*m)
+    Internal_friction = -C_h * normal_Force/m
+
+    #F = ma
+    dvdt = (cyclist + Air_drag + Viscous_force + gravitationalForce + Rolling_resistance + Internal_friction) / (m)
+
+    #Take the euler step to update the velocity and position of the biker
+    v1.append(v1[-1] + dvdt*dt)
+    x1.append(x1[-1] + v1[-1]*dt)
+    #keep track of time
+    time.append(time[-1]+dt)
     
-
-#def Hiking_trip(t):
-    #return .1*np.sin(.01*t)  
-
-#def X_games(t):
-    #return .5*np.sin(.005*t) 
-
-#print("1. Park Ride")
-#print("2. Hiking Trip")
-#print("3. X Games")
-
-#try:
- #   routeType = int(input("Choose 1,2 or 3:      "))
-#except:
- #   print("Invalid entry")
-  #  exit(1)
-
-#heights_Park_ride = [0]
-#heights_Hiking_trip = [0]
-#heights_X_games = [0]
-
-
-#Run the variables for every itteration________________________________________
-for i in range(1, step_value):
-        
-    Power_output = P1()
-
-    normal_Force = m * g * np.sin(current_angle)
-    
-    Rolling_resistance = C_r * normal_Force
-    
-    v1 = V1[i - 1]
-    
-    Air_drag = 0.5*C_d*ro*A*v1**2
-    
-    Viscous_force = n*(v1/h)
-    
-    Internal_friction = C_h * normal_Force
-    
-    D1 = np.cumsum(np.array(V1)*dt)
-
-
-    dvdt = (Power_output - Air_drag - Viscous_force - normal_Force - Rolling_resistance - Internal_friction) / (m)
-
-    v_new = v1 + dvdt*dt
-    x_new= D1 + (v_new*dt)
-    
-    current_angle = np.interp(x_new,distanceEarth,angle)
-    
-    V1.append(v_new)
-    D1_total = np.sum(np.array(V1)*dt)
-   
-
-   
-
-    print(D1_total)
-    #print("Rolling force:",Rolling_resistance, "slope force:",slope_force, "power output:",Power_output, "drag force:",Air_drag)
-
-
-average_velocity = np.mean(V1)
-print("average velocity:",average_velocity)
-
-
-
-
 # Plot Everything______________________________________________________________
 
-#YOU IF YOU PLAN ON CHOSING A CERTAIN BIKE PATH YOU HAVE TO MODIFY LINE NUMBER 119 TO MATCH YOUR CHOISE BEFOREHAND
-pp.plot(time, x_new, label='Dr.Pawlowski', color='orange')
-pp.title('distance over Time')
+vKPH = np.asarray(v1) * 3600/1000 #KPH are appropriate units for cycling
+pos = filename.rfind('.gpx')
+label = filename[:pos]
+pp.figure(figsize=(8,12))
+pp.subplot(311)
+pp.plot(time, bikerElevation, label=label, color='b')
+# pp.xlabel('Time (s)')
+pp.ylabel('Elevation (m)')
+pp.legend(frameon=False)
+
+
+pp.subplot(312)
+pp.plot(time, vKPH, color='b')
+# pp.xlabel('Time (s)')
+pp.ylabel('Velocity (kph)')
+
+pp.subplot(313)
+pp.plot(time, np.asarray(x1)/1000., label='Total Time: {} min'.format(int(time[-1]/60.)), color='b')
 pp.xlabel('Time (s)')
-pp.ylabel('distance')
-pp.legend()
-pp.show()
+pp.ylabel('Distance (km)')
+pp.legend(frameon=False)
+
+pp.savefig('plot.png')
+
