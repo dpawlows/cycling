@@ -77,9 +77,17 @@ for i in range(1,npoints):
 
     #gradient is rise over run
     gradient.append(y/newMovement)
+    if gradient[-1] > .13:
+        gradient[-1] = .13
+    if gradient[-1] < -.025:
+        gradient[-1] = -.025
 
     #angle is arctan of gradient
     angle.append(np.arctan(gradient[-1]))
+    #if angle[-1] > .13:
+     #   angle[-1] = .13
+    #if angle[-1] < -.025:
+      #  angle[-1] = -.025
     #breakpoint()
     previousCoords = coords #new coords become the old coords for the next iteration    
     
