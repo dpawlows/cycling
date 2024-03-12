@@ -159,9 +159,12 @@ vKPH = np.asarray(v1) * 3600/1000 #KPH are appropriate units for cycling
 pos = filename.rfind('.gpx')
 label = filename[:pos]
 pp.figure(figsize=(8,12))
-pp.subplot(311)
+ax1 = pp.subplot(311)
 #pp.plot(time, bikerElevation, label=label, color='b')
-pp.plot(gradient, label=label, color='b')
+ax2 = ax1.twinx()
+
+ax2.plot(gradient, color = 'r')
+ax1.plot(elevationEarth, label=label, color='b')
 # pp.xlabel('Time (s)')
 pp.ylabel('Elevation (m)')
 pp.legend(frameon=False)
