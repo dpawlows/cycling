@@ -78,7 +78,7 @@ for i in range(1,npoints):
     #gradient is rise over run
     gradient.append(y/newMovement)
     if gradient[-1] > .13:
-        gradient[-1] = .13
+        gradient[-1] = .15*(y/newMovement) 
     if gradient[-1] < -.025:
         gradient[-1] = -.025
 
